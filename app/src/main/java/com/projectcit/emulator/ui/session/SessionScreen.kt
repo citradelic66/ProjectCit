@@ -147,6 +147,7 @@ fun SessionScreen(initialPlatform: Platform, romTitle: String?, isGame: Boolean,
             val options = LayoutOptions(
                 platform, settings.ndsBookMode, settings.ndsEmphasis, settings.swapScreens, settings.integerScaling, controller,
                 frameWidth = frame?.first ?: 0, frameHeight = frame?.second ?: 0, toolbarButtons = toolbarButtons,
+                flatClamshell = settings.flatClamshell,
             )
             val spec = remember(window, options) { LayoutEngine.compute(window, options) }
             val pad = remember(spec, platform) { VirtualPadBuilder.build(spec, platform, density) }

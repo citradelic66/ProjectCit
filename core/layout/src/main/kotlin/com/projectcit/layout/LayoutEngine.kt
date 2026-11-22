@@ -38,7 +38,7 @@ object LayoutEngine {
     }
 
     private fun layout(window: WindowSpec, options: LayoutOptions): LayoutSpec {
-        val posture = PostureClassifier.classify(window)
+        val posture = PostureClassifier.classify(window, options.flatClamshell)
         val ctx = Ctx(window, options)
         val spec = when (posture) {
             Posture.PORTRAIT -> ctx.portrait(posture)

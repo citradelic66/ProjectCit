@@ -22,6 +22,8 @@ class SessionSettings(context: Context) {
         val padOpacity: Float = 0.55f,
         val debugOverlay: Boolean = false,
         val controllerMode: ControllerMode = ControllerMode.AUTO,
+        /** Fold open flat and held sideways: use the Flex-mode (clamshell) layout anyway. */
+        val flatClamshell: Boolean = true,
     )
 
     private val prefs = context.getSharedPreferences("session", Context.MODE_PRIVATE)
@@ -45,6 +47,7 @@ class SessionSettings(context: Context) {
             padOpacity = prefs.getFloat("padOpacity", d.padOpacity),
             debugOverlay = prefs.getBoolean("debugOverlay", d.debugOverlay),
             controllerMode = enum("controller", d.controllerMode, ControllerMode.entries.toTypedArray()),
+            flatClamshell = prefs.getBoolean("flatClamshell", d.flatClamshell),
         )
     }
 
@@ -54,6 +57,7 @@ class SessionSettings(context: Context) {
             .putBoolean("swap", v.swapScreens).putBoolean("integer", v.integerScaling)
             .putBoolean("haptics", v.haptics).putFloat("padOpacity", v.padOpacity)
             .putBoolean("debugOverlay", v.debugOverlay).putString("controller", v.controllerMode.name)
+            .putBoolean("flatClamshell", v.flatClamshell)
             .apply()
     }
 }

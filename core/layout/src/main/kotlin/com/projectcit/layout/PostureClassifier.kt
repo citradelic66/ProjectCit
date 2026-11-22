@@ -5,7 +5,12 @@ object PostureClassifier {
      * The hinge decides the posture, not the size class: an unfolded Galaxy Z Fold
      * inner display is ~690–830dp wide, i.e. MEDIUM, not EXPANDED.
      */
-    fun classify(window: WindowSpec): Posture {
+    /**
+     * @param flatHorizontalAsTabletop treat a fully open Fold held sideways (flat,
+     *   horizontal seam) like Flex mode: clamshell split along the seam. Bigger
+     *   screens for the DS than squeezing both between side rails.
+     */
+    fun classify(window: WindowSpec, flatHorizontalAsTabletop: Boolean = false): Posture {
         val hinge = window.hinge?.takeIf { it.isUsable(window) }
         val landscape = window.widthPx >= window.heightPx
         return when {
@@ -13,7 +18,8 @@ object PostureClassifier {
             hinge.orientation == HingeOrientation.VERTICAL ->
                 if (hinge.state == HingeState.FLAT) Posture.BOOK_FLAT else Posture.BOOK_HALF_OPENED
             hinge.state == HingeState.HALF_OPENED -> Posture.TABLETOP
-            // Flat with a horizontal seam: crease is cosmetic, use the regular layouts.
+            flatHorizontalAsTabletop -> Posture.TABLETOP
+            // Flat with a horizontal seam and the option off: use the regular layouts.
             else -> if (landscape) Posture.LANDSCAPE else Posture.PORTRAIT
         }
     }

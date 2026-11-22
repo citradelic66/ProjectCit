@@ -12,8 +12,14 @@ class PostureClassifierTest {
     @Test fun innerHalfIsBookHalf() =
         assertEquals(Posture.BOOK_HALF_OPENED, PostureClassifier.classify(Devices.foldInner(HingeState.HALF_OPENED)))
     @Test fun flexModeIsTabletop() = assertEquals(Posture.TABLETOP, PostureClassifier.classify(Devices.foldTabletop))
-    @Test fun flatHorizontalSeamIsPlainLandscape() =
-        assertEquals(Posture.LANDSCAPE, PostureClassifier.classify(Devices.foldFlatLandscape))
+    @Test fun flatHorizontalSeamIsPlainLandscapeWhenOptedOut() =
+        assertEquals(Posture.LANDSCAPE, PostureClassifier.classify(Devices.foldFlatLandscape, flatHorizontalAsTabletop = false))
+
+    @Test fun flatHorizontalSeamCanUseFlexLayout() =
+        assertEquals(Posture.TABLETOP, PostureClassifier.classify(Devices.foldFlatLandscape, flatHorizontalAsTabletop = true))
+
+    @Test fun flatVerticalSeamIsNeverClamshell() =
+        assertEquals(Posture.BOOK_FLAT, PostureClassifier.classify(Devices.foldInner(HingeState.FLAT), flatHorizontalAsTabletop = true))
 
     @Test fun foldInnerIsMediumNotExpanded() {
         // The reason posture is keyed off the hinge, not the size class.

@@ -104,6 +104,26 @@ class LayoutEngineTest {
         }
     }
 
+    @Test fun unfoldedSidewaysUsesClamshellWithBiggerDsScreens() {
+        // Device report: Fold open flat, held sideways (hinge FLAT HORIZONTAL at y=984 px).
+        val w = WindowSpec(2184f, 1968f, Devices.D, Insets(0f, 63f, 0f, 63f),
+            HingeInfo(Rect(0f, 984f, 2184f, 984f), HingeOrientation.HORIZONTAL, HingeState.FLAT, isSeparating = false, occludes = false))
+        val clam = LayoutEngine.compute(w, nds.copy(toolbarButtons = 4))
+        val old = LayoutEngine.compute(w, nds.copy(toolbarButtons = 4, flatClamshell = false))
+        assertEquals(Posture.TABLETOP, clam.posture)
+        assertEquals(Posture.LANDSCAPE, old.posture)
+        val top = clam.screen(ScreenRole.TOP)!!.rect
+        val bottom = clam.screen(ScreenRole.BOTTOM)!!.rect
+        assertTrue(top.bottom < 984f && bottom.top > 984f)               // split along the crease
+        // Both DS screens get far more room than squeezed side-by-side between rails (~2.9x area).
+        assertTrue(top.area > old.screen(ScreenRole.TOP)!!.rect.area * 2.5f)
+        assertTrue(bottom.area > old.screen(ScreenRole.BOTTOM)!!.rect.area * 2.5f)
+        // GBA pays a small price (top half is shorter than the full height): ~6% per side, not more.
+        val gClam = LayoutEngine.compute(w, gba).screen(ScreenRole.MAIN)!!.rect
+        val gOld = LayoutEngine.compute(w, gba.copy(flatClamshell = false)).screen(ScreenRole.MAIN)!!.rect
+        assertTrue(gClam.width / gOld.width in 0.9f..1f)
+    }
+
     @Test fun sgbBorderedFrameKeepsItsOwnAspect() {
         // Real device report: Tetris Plus (SGB) outputs 256×224 and was squeezed into 10:9.
         val w = Devices.foldInner(HingeState.FLAT)
@@ -152,10 +172,10 @@ class LayoutEngineTest {
         var checked = 0
         for (w in Devices.all) for (platform in Platform.entries) for (mode in NdsBookMode.entries)
         for (emph in NdsEmphasis.entries) for (swap in listOf(false, true))
-        for (pad in listOf(false, true)) for (integer in listOf(false, true)) for (tb in listOf(0, 2, 4)) {
+        for (pad in listOf(false, true)) for (integer in listOf(false, true)) for (tb in listOf(0, 2, 4)) for (clam in listOf(true, false)) {
             val sgb = platform == Platform.GB && tb == 2  // also sweep a real SGB-bordered frame size
             val o = LayoutOptions(platform, mode, emph, swap, integer, pad,
-                frameWidth = if (sgb) 256 else 0, frameHeight = if (sgb) 224 else 0, toolbarButtons = tb)
+                frameWidth = if (sgb) 256 else 0, frameHeight = if (sgb) 224 else 0, toolbarButtons = tb, flatClamshell = clam)
             val spec = LayoutEngine.compute(w, o)
             val label = "${spec.posture} $o"
             assertEquals(label, platform.screenCount, spec.screens.size)
@@ -194,6 +214,6 @@ class LayoutEngineTest {
             assertNotNull(spec.posture)
             checked++
         }
-        assertTrue(checked > 4000)
+        assertTrue(checked > 8000)
     }
 }

@@ -95,6 +95,8 @@ data class LayoutOptions(
     val frameHeight: Int = 0,
     /** Number of round toolbar buttons (fast-forward, swap, layout, menu) to place; 0 = none. */
     val toolbarButtons: Int = 0,
+    /** Fold fully open and held sideways: use the Flex-mode clamshell layout anyway. */
+    val flatClamshell: Boolean = true,
 ) {
     /** Source size of one screen: the real frame when known (single-screen), else the console's native size. */
     val sourceWidth: Int get() = if (!platform.isDualScreen && frameWidth > 0 && frameHeight > 0) frameWidth else platform.screenWidth

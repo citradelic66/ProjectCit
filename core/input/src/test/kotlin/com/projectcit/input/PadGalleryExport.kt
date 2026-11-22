@@ -24,16 +24,20 @@ class PadGalleryExport {
         // The user's real Fold (from their debug overlay) and cover screen.
         val fold7 = WindowSpec(1968f, 2184f, d, Insets(0f, 63f, 0f, 63f),
             HingeInfo(Rect(984f, 0f, 984f, 2184f), HingeOrientation.VERTICAL, HingeState.FLAT, false, false))
+        val fold7Side = WindowSpec(2184f, 1968f, d, Insets(0f, 63f, 0f, 63f),
+            HingeInfo(Rect(0f, 984f, 2184f, 984f), HingeOrientation.HORIZONTAL, HingeState.FLAT, false, false))
         val cover = WindowSpec(1080f, 2520f, d, Insets(0f, 110f, 0f, 63f))
         val sgb = LayoutOptions(Platform.GB, frameWidth = 256, frameHeight = 224, toolbarButtons = 2)
         val cases = listOf(
             Triple("Cover · GB (SGB)", cover, sgb),
             Triple("Cover · GBA", cover, LayoutOptions(Platform.GBA, toolbarButtons = 2)),
             Triple("Cover · NDS", cover, LayoutOptions(Platform.NDS, toolbarButtons = 4)),
-            Triple("Landscape · NDS", WindowSpec(2520f, 1080f, d, Insets(110f, 0f, 63f, 0f)), LayoutOptions(Platform.NDS, toolbarButtons = 4)),
+            Triple("Fold7 open sideways · NDS (new)", fold7Side, LayoutOptions(Platform.NDS, toolbarButtons = 4)),
+            Triple("…same, switch off (before)", fold7Side, LayoutOptions(Platform.NDS, toolbarButtons = 4, flatClamshell = false)),
+            Triple("Fold7 open sideways · GBA (new)", fold7Side, LayoutOptions(Platform.GBA, toolbarButtons = 2)),
             Triple("Fold7 flat · GB (SGB)", fold7, sgb),
             Triple("Fold7 flat · NDS book", fold7, LayoutOptions(Platform.NDS, toolbarButtons = 4)),
-            Triple("Fold7 flat · NDS hybrid", fold7, LayoutOptions(Platform.NDS, NdsBookMode.HYBRID, toolbarButtons = 4)),
+
             Triple("Flex · NDS clamshell", flex, LayoutOptions(Platform.NDS, toolbarButtons = 4)),
         )
         val figs = cases.joinToString("") { (title, w, o) ->
