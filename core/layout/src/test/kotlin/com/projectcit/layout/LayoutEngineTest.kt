@@ -43,7 +43,7 @@ class LayoutEngineTest {
 
     @Test fun bookSideBySideSplitsAcrossSeam() {
         val w = Devices.foldInner(HingeState.FLAT)
-        val spec = LayoutEngine.compute(w, nds)
+        val spec = LayoutEngine.compute(w, nds.copy(flatClamshell = false))
         val seam = w.hinge!!.bounds.left
         assertTrue(spec.screen(ScreenRole.TOP)!!.rect.right < seam)
         assertTrue(spec.screen(ScreenRole.BOTTOM)!!.rect.left > seam)
@@ -52,7 +52,7 @@ class LayoutEngineTest {
 
     @Test fun hybridKeepsTouchscreenSmallerAboveControlsOnRight() {
         val w = Devices.foldInner(HingeState.FLAT)
-        val spec = LayoutEngine.compute(w, nds.copy(ndsBookMode = NdsBookMode.HYBRID))
+        val spec = LayoutEngine.compute(w, nds.copy(ndsBookMode = NdsBookMode.HYBRID, flatClamshell = false))
         val big = spec.screen(ScreenRole.TOP)!!.rect
         val small = spec.screen(ScreenRole.BOTTOM)!!.rect
         val seam = w.hinge!!.bounds.left
@@ -122,6 +122,29 @@ class LayoutEngineTest {
         val gClam = LayoutEngine.compute(w, gba).screen(ScreenRole.MAIN)!!.rect
         val gOld = LayoutEngine.compute(w, gba.copy(flatClamshell = false)).screen(ScreenRole.MAIN)!!.rect
         assertTrue(gClam.width / gOld.width in 0.9f..1f)
+    }
+
+    @Test fun unfoldedUprightDsCanUseClamshellToo() {
+        // Device report: upright BOOK_FLAT showed the DS side-by-side; the user wants Flex style.
+        val w = Devices.fold7Inner
+        val clam = LayoutEngine.compute(w, nds.copy(toolbarButtons = 4))
+        val book = LayoutEngine.compute(w, nds.copy(toolbarButtons = 4, flatClamshell = false))
+        val top = clam.screen(ScreenRole.TOP)!!.rect
+        val bottom = clam.screen(ScreenRole.BOTTOM)!!.rect
+        assertEquals(Posture.BOOK_FLAT, clam.posture)            // still reported truthfully
+        assertTrue(top.bottom <= bottom.top)                       // stacked like a DS
+        assertTrue(top.area > book.screen(ScreenRole.TOP)!!.rect.area * 1.4f)
+        assertTrue(bottom.area > book.screen(ScreenRole.BOTTOM)!!.rect.area * 1.4f)
+        // Controls flank the touchscreen, below the top screen, nowhere on the crease line.
+        val dpad = clam.controls.first { it.cluster == ControlCluster.DPAD }.rect
+        val face = clam.controls.first { it.cluster == ControlCluster.FACE_BUTTONS }.rect
+        assertTrue(dpad.right <= bottom.left && face.left >= bottom.right && dpad.top >= top.bottom)
+        // Half-open (angled crease) never crosses it, whatever the setting.
+        val half = LayoutEngine.compute(Devices.foldInner(HingeState.HALF_OPENED), nds)
+        val seam = Devices.foldInner(HingeState.HALF_OPENED).hinge!!.bounds.left
+        half.screens.forEach { assertFalse(it.rect.left < seam && it.rect.right > seam) }
+        // GBA upright is unchanged by the setting (its flat layout is already game-over-controls, and bigger).
+        assertEquals(LayoutEngine.compute(w, gba).screens, LayoutEngine.compute(w, gba.copy(flatClamshell = false)).screens)
     }
 
     @Test fun sgbBorderedFrameKeepsItsOwnAspect() {
@@ -201,9 +224,11 @@ class LayoutEngineTest {
                     assertFalse("$label toolbar on seam", t.intersects(Rect(h.bounds.left - pad12, h.bounds.top - pad12, h.bounds.right + pad12, h.bounds.bottom + pad12)))
                 }
             }
-            // Nothing may straddle a seam, except a single screen on a fully flat book.
+            // Nothing may straddle a seam, except screens on a fully flat book (single game
+            // centred, or DS stacked when the user chose the clamshell layout).
             val hinge = spec.hinge
-            if (hinge != null && !(spec.posture == Posture.BOOK_FLAT && !platform.isDualScreen)) {
+            val mayCross = spec.posture == Posture.BOOK_FLAT && (!platform.isDualScreen || clam)
+            if (hinge != null && !mayCross) {
                 val seamZone = when (hinge.orientation) {
                     HingeOrientation.VERTICAL -> Rect(hinge.bounds.left - 1f, -1e6f, hinge.bounds.right + 1f, 1e6f)
                     HingeOrientation.HORIZONTAL -> Rect(-1e6f, hinge.bounds.top - 1f, 1e6f, hinge.bounds.bottom + 1f)

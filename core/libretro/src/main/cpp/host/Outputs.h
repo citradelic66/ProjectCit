@@ -24,6 +24,8 @@ public:
     virtual bool hasWindow() const = 0;
     virtual void present(const FrameBuffer& frame, const std::vector<Quad>& quads) = 0;
     virtual uint64_t presented() const = 0;
+    /** Failed attaches/swaps (each one logged); surfaced in the debug overlay. */
+    virtual uint64_t errors() const { return 0; }
 };
 
 /** Audio sink; start/pause/resume/stop are called on the emulation thread. */

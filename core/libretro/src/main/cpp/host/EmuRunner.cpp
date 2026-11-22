@@ -126,6 +126,7 @@ void EmuRunner::setWindow(void* nativeWindow) {
         { std::lock_guard<std::mutex> l(mutex_); q = quads_; }
         video_->present(host_->frame(), q);
         presented_ = video_->presented();
+        videoErrors_ = video_->errors();
     });
 }
 
@@ -155,6 +156,7 @@ EmuRunner::Stats EmuRunner::stats() const {
     Stats s;
     s.framesRun = host_->framesRun();
     s.presented = presented_;
+    s.videoErrors = videoErrors_;
     s.pacerResyncs = resyncs_;
     s.measuredFps = measuredFps_;
     s.targetFps = targetFps_;
@@ -233,6 +235,7 @@ void EmuRunner::loop() {
         if (speed <= 1.0 || now - lastPresent >= kMinPresentInterval) {
             video_->present(host_->frame(), quads);
             presented_ = video_->presented();
+            videoErrors_ = video_->errors();
             lastPresent = now;
         }
         // Battery saves: cheap memcmp each second, a file write only when changed.

@@ -18,6 +18,8 @@ data class RunnerStats(
     val coreRequestedShutdown: Boolean,
     val deviceSampleRate: Int,
     val pacerResyncs: Long,
+    /** Failed surface attaches / buffer swaps on the GL side (0 when healthy). */
+    val videoErrors: Long,
 )
 
 /**
@@ -76,7 +78,7 @@ class EmulationRunner internal constructor(private val core: LibretroCore, priva
     fun stats(): RunnerStats = NativeBridge.nativeRunnerStats(r()).let {
         RunnerStats(
             it[0].toLong(), it[1].toLong(), it[2], it[3], it[4], it[5].toLong(), it[6].toLong(), it[7],
-            it[8] != 0.0, it[9] != 0.0, it[10] != 0.0, it[11].toInt(), it[12].toLong(),
+            it[8] != 0.0, it[9] != 0.0, it[10] != 0.0, it[11].toInt(), it[12].toLong(), it[13].toLong(),
         )
     }
 

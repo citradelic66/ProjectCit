@@ -301,14 +301,15 @@ JNI_FN(jboolean, nativeRunnerFlushSaveRam)(JNIEnv* env, jobject, jlong r, jobjec
 }
 
 /** [framesRun, presented, measuredFps, targetFps, audioFill, underruns, dropped, drcRatio,
- *   paused, hasWindow, coreShutdown, deviceRate, pacerResyncs] */
+ *   paused, hasWindow, coreShutdown, deviceRate, pacerResyncs, videoErrors] */
 JNI_FN(jdoubleArray, nativeRunnerStats)(JNIEnv* env, jobject, jlong r) {
     const auto s = R(r)->stats();
-    const jdouble v[13] = {static_cast<double>(s.framesRun), static_cast<double>(s.presented), s.measuredFps, s.targetFps,
+    const jdouble v[14] = {static_cast<double>(s.framesRun), static_cast<double>(s.presented), s.measuredFps, s.targetFps,
                            s.audioFillFrames, static_cast<double>(s.audioUnderruns), static_cast<double>(s.audioDropped),
                            s.drcRatio, s.paused ? 1.0 : 0.0, s.hasWindow ? 1.0 : 0.0, s.coreRequestedShutdown ? 1.0 : 0.0,
-                           static_cast<double>(s.deviceSampleRate), static_cast<double>(s.pacerResyncs)};
-    jdoubleArray arr = env->NewDoubleArray(13);
-    env->SetDoubleArrayRegion(arr, 0, 13, v);
+                           static_cast<double>(s.deviceSampleRate), static_cast<double>(s.pacerResyncs),
+                           static_cast<double>(s.videoErrors)};
+    jdoubleArray arr = env->NewDoubleArray(14);
+    env->SetDoubleArrayRegion(arr, 0, 14, v);
     return arr;
 }

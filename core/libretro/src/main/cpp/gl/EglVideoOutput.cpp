@@ -31,24 +31,46 @@ void EglVideoOutput::releaseWindow() {
 }
 
 void EglVideoOutput::setWindow(void* nativeWindow) {
+    // Same window again (SurfaceView reports a resize on fold/rotate): keep the EGL
+    // surface. EGL picks up the new size by itself; tearing it down and recreating it
+    // on every resize is needless churn and a failure point (device report: black
+    // screens after rotating).
+    if (nativeWindow && nativeWindow == window_ && egl_.hasWindow()) {
+#if defined(__ANDROID__)
+        ANativeWindow_release(static_cast<ANativeWindow*>(nativeWindow));  // drop the extra ref from fromSurface()
+#endif
+        return;
+    }
     egl_.detachWindow();  // must finish with the old surface before releasing it
     releaseWindow();
     if (!nativeWindow || !ready_) return;
     window_ = nativeWindow;
+    if (!attach()) releaseWindow();
+}
+
+bool EglVideoOutput::attach() {
     std::string err;
-    if (!egl_.attachWindow(reinterpret_cast<EGLNativeWindowType>(nativeWindow), err)) {
-        LOGE("attach window failed: %s", err.c_str());
-        releaseWindow();
-    }
+    if (egl_.attachWindow(reinterpret_cast<EGLNativeWindowType>(window_), err)) return true;
+    ++errors_;
+    LOGE("attach window failed: %s (egl 0x%x)", err.c_str(), eglGetError());
+    return false;
 }
 
 void EglVideoOutput::present(const FrameBuffer& frame, const std::vector<Quad>& quads) {
-    if (!ready_ || !egl_.hasWindow()) return;
+    if (!ready_ || !window_) return;
+    if (!egl_.hasWindow() && !attach()) return;  // a previous swap failure dropped it: retry
     int w = 0, h = 0;
-    if (!egl_.windowSize(w, h) || w <= 0 || h <= 0) return;
+    if (!egl_.windowSize(w, h) || w <= 0 || h <= 0) { ++errors_; return; }
     renderer_.upload(frame);
     renderer_.draw(w, h, quads);
-    if (egl_.swap()) ++presented_;
+    if (egl_.swap()) { ++presented_; return; }
+    // Swap failed: the surface behind our EGLSurface went bad. Recreate it once from
+    // the window we still hold; if that fails too, present() retries next frame.
+    ++errors_;
+    const EGLint e = eglGetError();
+    LOGE("eglSwapBuffers failed (0x%x), recreating window surface", e);
+    egl_.detachWindow();
+    attach();
 }
 
 }  // namespace retrohost

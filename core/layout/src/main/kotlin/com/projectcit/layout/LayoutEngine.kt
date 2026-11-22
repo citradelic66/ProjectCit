@@ -184,6 +184,12 @@ object LayoutEngine {
                 }
             }
 
+            if (posture == Posture.BOOK_FLAT && o.flatClamshell) {
+                // Open flat, upright: the user prefers the clamshell DS layout even though
+                // both screens then cross the (cosmetic, flat) crease. Split at mid-height.
+                val mid = content.centerY
+                return clamshell(posture, mid - gap, mid + gap, hinge).copy(panes = panes)
+            }
             return when (o.ndsBookMode) {
                 NdsBookMode.SIDE_BY_SIDE -> {
                     val screenH = if (touch) 0.52f else 1f
@@ -231,15 +237,24 @@ object LayoutEngine {
         // ---- TABLETOP / Flex mode (horizontal seam, half open) --------------------
         fun tabletop(posture: Posture): LayoutSpec {
             val hinge = window.hinge!!
-            val top = Rect(content.left, content.top, content.right, min(hinge.bounds.top - seam, content.bottom))
-            val bottom = Rect(content.left, max(hinge.bounds.bottom + seam, content.top), content.right, content.bottom)
+            return clamshell(posture, hinge.bounds.top - seam, hinge.bounds.bottom + seam, hinge)
+        }
+
+        /**
+         * Clamshell split: game/DS top screen above [splitTop], controls (and the DS
+         * touchscreen) below [splitBottom]. Used for Flex mode and, when the Fold is
+         * open flat, upright or sideways, if the user prefers it.
+         */
+        fun clamshell(posture: Posture, splitTop: Float, splitBottom: Float, hinge: HingeInfo?): LayoutSpec {
+            val top = Rect(content.left, content.top, content.right, min(splitTop, content.bottom))
+            val bottom = Rect(content.left, max(splitBottom, content.top), content.right, content.bottom)
             val panes = listOf(top, bottom)
             if (!p.isDualScreen) {
                 val screen = fit(top.inset(margin))
                 val controls = if (touch) deck(bottom.inset(margin, 0f, margin, margin)) else emptyList()
                 return LayoutSpec(posture, content, panes, hinge, listOf(main(screen)), controls)
             }
-            // True clamshell: DS top screen above the seam, touchscreen below with
+            // True clamshell: DS top screen above the split, touchscreen below with
             // controls flanking it like the hardware.
             val upper = fit(top.inset(margin))
             val rail = if (touch) railWidth(bottom.width) else 0f

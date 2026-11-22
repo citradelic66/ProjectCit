@@ -174,7 +174,9 @@ fun SessionScreen(initialPlatform: Platform, romTitle: String?, isGame: Boolean,
                 Hud(
                     spec, options, window, info.foldingFeature()?.toRaw(), source, gamepadAttached, romTitle, stats, hudExpanded,
                     onToggle = { hudExpanded = !hudExpanded },
-                    modifier = Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp),
+                    // Debug panel goes below the toolbar when the toolbar sits near the top.
+                    modifier = Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(start = 8.dp, end = 8.dp, top = 8.dp + (spec.toolbar?.takeIf { it.top < 120f * density }?.let { (it.bottom - window.insets.top) / density } ?: 0f).dp),
                 )
             }
             HotkeyBar(
@@ -305,9 +307,10 @@ private fun Hud(
     val lines = buildList {
         add("${spec.posture}  ·  ${romTitle ?: "Layout lab"}")
         stats?.let { st ->
-            add("%.2f/%.2f fps · audio %.0f fr · drc %.4f · %d Hz · underruns %d%s".format(
+            add("%.2f/%.2f fps · audio %.0f fr · drc %.4f · %d Hz · underruns %d · dropped %d%s".format(
                 st.measuredFps, st.targetFps, st.audioBufferedFrames, st.drcRatio, st.deviceSampleRate, st.audioUnderruns,
-                if (st.paused) " · PAUSED" else ""))
+                st.audioDroppedFrames, if (st.paused) " · PAUSED" else ""))
+            add("surface %s · drawn %d · gpu errors %d".format(if (st.hasSurface) "yes" else "NO", st.framesPresented, st.videoErrors))
         }
         if (expanded) {
             add("window %.0f×%.0f dp  w=%s h=%s".format(window.widthDp, window.heightDp, window.widthClass, window.heightClass))

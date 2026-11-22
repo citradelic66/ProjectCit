@@ -27,7 +27,7 @@ namespace retrohost {
 class EmuRunner {
 public:
     struct Stats {
-        uint64_t framesRun = 0, presented = 0, audioUnderruns = 0, audioDropped = 0, pacerResyncs = 0;
+        uint64_t framesRun = 0, presented = 0, videoErrors = 0, audioUnderruns = 0, audioDropped = 0, pacerResyncs = 0;
         double measuredFps = 0, targetFps = 0, drcRatio = 1, audioFillFrames = 0;
         bool paused = false, hasWindow = false, coreRequestedShutdown = false;
         int deviceSampleRate = 0;
@@ -77,7 +77,7 @@ private:
     std::string startError_;
 
     // stats (written on the emulation thread)
-    std::atomic<uint64_t> presented_{0}, resyncs_{0};
+    std::atomic<uint64_t> presented_{0}, resyncs_{0}, videoErrors_{0};
     std::atomic<double> measuredFps_{0}, targetFps_{0};
     std::atomic<bool> hasWindow_{false};
 };

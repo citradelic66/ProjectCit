@@ -29,14 +29,14 @@ class PadGalleryExport {
         val cover = WindowSpec(1080f, 2520f, d, Insets(0f, 110f, 0f, 63f))
         val sgb = LayoutOptions(Platform.GB, frameWidth = 256, frameHeight = 224, toolbarButtons = 2)
         val cases = listOf(
-            Triple("Cover · GB (SGB)", cover, sgb),
             Triple("Cover · GBA", cover, LayoutOptions(Platform.GBA, toolbarButtons = 2)),
             Triple("Cover · NDS", cover, LayoutOptions(Platform.NDS, toolbarButtons = 4)),
             Triple("Fold7 open sideways · NDS (new)", fold7Side, LayoutOptions(Platform.NDS, toolbarButtons = 4)),
             Triple("…same, switch off (before)", fold7Side, LayoutOptions(Platform.NDS, toolbarButtons = 4, flatClamshell = false)),
             Triple("Fold7 open sideways · GBA (new)", fold7Side, LayoutOptions(Platform.GBA, toolbarButtons = 2)),
             Triple("Fold7 flat · GB (SGB)", fold7, sgb),
-            Triple("Fold7 flat · NDS book", fold7, LayoutOptions(Platform.NDS, toolbarButtons = 4)),
+            Triple("Fold7 upright flat · NDS (new)", fold7, LayoutOptions(Platform.NDS, toolbarButtons = 4)),
+            Triple("…same, switch off", fold7, LayoutOptions(Platform.NDS, NdsBookMode.HYBRID, toolbarButtons = 4, flatClamshell = false)),
 
             Triple("Flex · NDS clamshell", flex, LayoutOptions(Platform.NDS, toolbarButtons = 4)),
         )

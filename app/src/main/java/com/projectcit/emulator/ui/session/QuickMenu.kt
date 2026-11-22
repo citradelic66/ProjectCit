@@ -104,7 +104,7 @@ fun QuickMenu(
                 { when (it) { NdsEmphasis.BALANCED -> "Equal"; NdsEmphasis.TOP_LARGE -> "Top large"; NdsEmphasis.BOTTOM_LARGE -> "Touch large" } }) { v -> onSettings { it.copy(ndsEmphasis = v) } }
             SwitchRow("Swap screens", settings.swapScreens) { v -> onSettings { it.copy(swapScreens = v) } }
         }
-        SwitchRow("Flex layout when the Fold is open flat and held sideways", settings.flatClamshell) { v -> onSettings { it.copy(flatClamshell = v) } }
+        SwitchRow("Flex layout when the Fold is open flat (upright: DS only)", settings.flatClamshell) { v -> onSettings { it.copy(flatClamshell = v) } }
         SwitchRow("Pixel-perfect (integer) scaling", settings.integerScaling) { v -> onSettings { it.copy(integerScaling = v) } }
         SwitchRow("Vibrate on button press", settings.haptics) { v -> onSettings { it.copy(haptics = v) } }
         group("On-screen controls", listOf(0.3f, 0.55f, 0.85f), settings.padOpacity,
