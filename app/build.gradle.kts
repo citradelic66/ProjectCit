@@ -56,6 +56,7 @@ kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarg
 dependencies {
     implementation(project(":core:layout"))
     implementation(project(":core:storage"))
+    implementation(project(":core:input"))
     implementation(project(":core:libretro"))
 
     implementation(libs.androidx.core.ktx)
@@ -73,4 +74,5 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
 }

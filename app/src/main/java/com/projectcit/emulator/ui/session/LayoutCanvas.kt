@@ -73,7 +73,12 @@ fun LayoutCanvas(spec: LayoutSpec, platform: Platform, overlay: Boolean, drawScr
             }
             label(tm, text, Offset(s.rect.left + 8f, s.rect.top + 8f), color)
         }
-        spec.controls.forEach { c ->
+        // In a game the real virtual pad is drawn by VirtualPadOverlay; zones only show as debug outlines.
+        if (drawScreens || overlay) spec.controls.forEach { c ->
+            if (!drawScreens) {
+                drawRoundRect(Color(0x55FFFF00), c.rect.offset(), c.rect.size(), CornerRadius(24f, 24f), style = Stroke(1.5f))
+                return@forEach
+            }
             drawRoundRect(Color(0x33FFFFFF), c.rect.offset(), c.rect.size(), CornerRadius(24f, 24f))
             if (overlay) drawRoundRect(Color(0x88FFFFFF), c.rect.offset(), c.rect.size(), CornerRadius(24f, 24f), style = Stroke(2f))
             val name = when (c.cluster) {

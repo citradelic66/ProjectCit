@@ -1,10 +1,15 @@
 package com.projectcit.emulator.emulation
 
 import android.content.Context
+import android.hardware.input.InputManager
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Surface
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.projectcit.input.Hotkey
+import com.projectcit.input.PhysicalPad
 import com.projectcit.layout.PointerSample
 import com.projectcit.layout.ScreenViewport
 import com.projectcit.libretro.RunnerStats
@@ -14,7 +19,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -52,6 +60,32 @@ class EmulationController(private val context: Context, private val systemDir: F
     private var backgrounded = false
     private var userPaused = false
 
+    // ---- input: touch pad + physical controllers merge into one libretro mask
+    private val physical = PhysicalPad()
+    @Volatile private var touchMask = 0
+    @Volatile private var physicalMask = 0
+    @Volatile private var ffToggle = false
+    @Volatile private var ffHeld = false
+    private val _fastForward = MutableStateFlow(false)
+    val fastForward: StateFlow<Boolean> = _fastForward.asStateFlow()
+    private val _hotkeys = MutableSharedFlow<Hotkey>(extraBufferCapacity = 8)
+    /** Emulator shortcuts from controllers/keyboards (menu, swap screens) for the UI to act on. */
+    val hotkeys: SharedFlow<Hotkey> = _hotkeys.asSharedFlow()
+
+    init {
+        // A controller unplugged mid-press must not leave buttons stuck down.
+        context.getSystemService(InputManager::class.java).registerInputDeviceListener(object : InputManager.InputDeviceListener {
+            override fun onInputDeviceAdded(deviceId: Int) = Unit
+            override fun onInputDeviceChanged(deviceId: Int) = Unit
+            override fun onInputDeviceRemoved(deviceId: Int) {
+                physical.reset()
+                applyPhysical(physical.mask, physical.fastForwardHeld)
+            }
+        }, Handler(Looper.getMainLooper()))
+    }
+
+    val isRunning: Boolean get() = state.value is State.Running
+
     val currentRomUri: String? get() = (state.value as? State.Running)?.rom?.uri ?: (state.value as? State.Loading)?.rom?.uri
 
     fun start(rom: RomEntry, index: LibraryIndex) {
@@ -67,6 +101,8 @@ class EmulationController(private val context: Context, private val systemDir: F
                     surface?.let(runner::setSurface)
                     userPaused = false
                     if (backgrounded) runner.setPaused(true)
+                    touchMask = 0; physicalMask = 0; ffToggle = false; ffHeld = false; _fastForward.value = false
+                    physical.reset()
                 }
                 Log.i(TAG, "started ${rom.title} with ${s.coreId.displayName} (${s.contentStrategy}, imported save: ${s.importedSave})")
                 _state.value = State.Running(rom, userPaused = false)
@@ -116,8 +152,38 @@ class EmulationController(private val context: Context, private val systemDir: F
         session?.core?.setPointer(sample.x, sample.y, sample.pressed)  // input setters are thread-safe
     }
 
-    fun setButtons(mask: Int) {
-        session?.core?.setButtons(0, mask)
+    /** Virtual pad mask (main thread). */
+    fun setTouchButtons(mask: Int) {
+        touchMask = mask
+        pushButtons()
+    }
+
+    /** Physical key from the Activity. @return true if consumed. */
+    fun onKey(keyCode: Int, down: Boolean, repeatCount: Int): Boolean {
+        if (!isRunning) return false
+        val u = physical.onKey(keyCode, down, repeatCount) ?: return false
+        applyPhysical(u.mask, u.fastForwardHeld)
+        u.triggered.forEach { _hotkeys.tryEmit(it) }
+        return true
+    }
+
+    /** Joystick/hat/trigger axes from the Activity. */
+    fun onAxes(deviceId: Int, axes: Map<Int, Float>): Boolean {
+        if (!isRunning) return false
+        val u = physical.onAxes(deviceId, axes)
+        applyPhysical(u.mask, u.fastForwardHeld)
+        u.triggered.forEach { _hotkeys.tryEmit(it) }
+        return true
+    }
+
+    private fun applyPhysical(mask: Int, ffHeldNow: Boolean) {
+        physicalMask = mask
+        pushButtons()
+        if (ffHeldNow != ffHeld) { ffHeld = ffHeldNow; applySpeed() }
+    }
+
+    private fun pushButtons() {
+        session?.core?.setButtons(0, touchMask or physicalMask)  // atomic store natively; any thread
     }
 
     fun setUserPaused(paused: Boolean): Unit = synchronized(lock) {
@@ -126,9 +192,22 @@ class EmulationController(private val context: Context, private val systemDir: F
         (state.value as? State.Running)?.let { _state.value = it.copy(userPaused = paused) }
     }
 
-    fun setFastForward(on: Boolean) {
+    fun setFastForwardToggle(on: Boolean) {
+        ffToggle = on
+        applySpeed()
+    }
+
+    private fun applySpeed() {
+        val on = ffToggle || ffHeld
+        _fastForward.value = on
         session?.runner?.setSpeed(if (on) FAST_FORWARD_SPEED else 1.0)
     }
+
+    fun reset() {
+        session?.runner?.reset()
+    }
+
+    fun slots(): List<StateSlots.Slot?> = session?.slots?.list() ?: emptyList()
 
     fun stats(): RunnerStats? = synchronized(lock) { session?.runner?.stats() }
 
