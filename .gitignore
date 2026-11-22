@@ -9,3 +9,6 @@ build/
 .cxx/
 *.apk
 *.aab
+
+# Prebuilt libretro cores (see app/cores/README.md)
+/app/cores/**/*.so

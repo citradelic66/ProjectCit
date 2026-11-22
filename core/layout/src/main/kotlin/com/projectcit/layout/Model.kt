@@ -91,15 +91,18 @@ data class LayoutOptions(
 enum class ScreenRole { MAIN, TOP, BOTTOM }
 
 /**
- * Destination quad for one emulated screen. [sourceUv] is the normalized V range of
- * the core framebuffer to sample (NDS: top = 0..0.5, bottom = 0.5..1). The renderer
- * in Phase 3 consumes this directly.
+ * Destination quad for one emulated screen, plus the normalized region of the core's
+ * video frame it shows. For melonDS DS (forced to its "top-bottom" layout, 256×384)
+ * the top screen is V 0..0.5 and the touchscreen V 0.5..1. The Phase 3 renderer
+ * samples this region; [PointerMapper] inverts it for touch input.
  */
 data class ScreenViewport(
     val role: ScreenRole,
     val rect: Rect,
     val sourceVTop: Float,
     val sourceVBottom: Float,
+    val sourceULeft: Float = 0f,
+    val sourceURight: Float = 1f,
 ) {
     val acceptsTouch: Boolean get() = role == ScreenRole.BOTTOM
 }

@@ -1,9 +1,16 @@
 package com.projectcit.storage
 
-/** libretro core shipped in jniLibs; resolved via ApplicationInfo.nativeLibraryDir. */
-enum class CoreId(val libraryFileName: String, val displayName: String) {
-    MGBA("mgba_libretro_android.so", "mGBA"),
-    MELONDS_DS("melondsds_libretro_android.so", "melonDS DS"),
+/**
+ * libretro core shipped in jniLibs; resolved via ApplicationInfo.nativeLibraryDir.
+ * Android's installer only extracts files named lib*.so, so the buildbot file
+ * (e.g. mgba_libretro_android.so) is packaged as lib + that name.
+ */
+enum class CoreId(val libraryFileName: String, val displayName: String, val abis: Set<String>) {
+    MGBA("mgba_libretro_android.so", "mGBA", setOf("arm64-v8a", "armeabi-v7a", "x86_64")),
+    // melonDS DS publishes Android builds for arm64-v8a only.
+    MELONDS_DS("melondsds_libretro_android.so", "melonDS DS", setOf("arm64-v8a"));
+
+    val installedFileName: String get() = "lib$libraryFileName"
 }
 
 enum class ConsoleSystem(val extensions: Set<String>, val core: CoreId, val label: String) {
@@ -68,10 +75,21 @@ data class BiosEntry(
     val sizeValid: Boolean get() = size in kind.validSizes
 }
 
+/** A battery save sitting next to a ROM in the user's folder (from another emulator or a flashcart). */
+data class ExternalSave(val uri: String, val name: String, val size: Long, val lastModified: Long)
+
 data class LibraryIndex(
     val roms: List<RomEntry>,
     val bios: Map<BiosKind, BiosEntry>,
     val scannedAtMillis: Long,
+    /** Keyed by [saveKey] of the ROM it belongs to. */
+    val saves: Map<String, ExternalSave> = emptyMap(),
 ) {
-    companion object { val EMPTY = LibraryIndex(emptyList(), emptyMap(), 0L) }
+    fun externalSaveFor(rom: RomEntry): ExternalSave? = saves[saveKey(rom.parentPath, rom.title)]
+
+    companion object {
+        val EMPTY = LibraryIndex(emptyList(), emptyMap(), 0L)
+        val SAVE_EXTENSIONS = setOf("sav", "srm")
+        fun saveKey(parentPath: String, title: String) = "$parentPath/$title".lowercase()
+    }
 }

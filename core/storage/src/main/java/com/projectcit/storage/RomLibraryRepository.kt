@@ -106,6 +106,11 @@ class RomLibraryRepository(context: Context) {
                         .put("mtime", r.lastModified).put("system", r.system.name).put("path", r.parentPath))
                 }
             })
+            .put("saves", JSONArray().apply {
+                index.saves.forEach { (key, sv) ->
+                    put(JSONObject().put("key", key).put("uri", sv.uri).put("name", sv.name).put("size", sv.size).put("mtime", sv.lastModified))
+                }
+            })
             .put("bios", JSONArray().apply {
                 index.bios.values.forEach { b ->
                     put(JSONObject().put("kind", b.kind.name).put("uri", b.uri).put("size", b.size)
@@ -134,7 +139,13 @@ class RomLibraryRepository(context: Context) {
                 kind to BiosEntry(kind, o.getString("uri"), o.getLong("size"), o.getLong("mtime"), o.optString("path"))
             }.toMap()
         }
-        return LibraryIndex(roms, bios, json.getLong("scannedAt"))
+        val saves = json.optJSONArray("saves")?.let { a ->
+            (0 until a.length()).associate { i ->
+                val o = a.getJSONObject(i)
+                o.getString("key") to ExternalSave(o.getString("uri"), o.getString("name"), o.getLong("size"), o.getLong("mtime"))
+            }
+        } ?: emptyMap()
+        return LibraryIndex(roms, bios, json.getLong("scannedAt"), saves)
     }
 
     private companion object { const val KEY_TREE = "tree_uri" }

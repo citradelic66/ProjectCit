@@ -35,6 +35,22 @@ android {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Prebuilt libretro cores. Put buildbot downloads in app/cores/<abi>/, e.g.
+//   app/cores/arm64-v8a/mgba_libretro_android.so
+// They are renamed to lib*.so (Android only extracts lib*.so from an APK) and
+// packaged as native libraries. See app/cores/README.md.
+// ---------------------------------------------------------------------------
+val stageCores by tasks.registering(Sync::class) {
+    from("cores") {
+        include("*/*.so")
+        rename { name -> if (name.startsWith("lib")) name else "lib$name" }
+    }
+    into(layout.buildDirectory.dir("generated/cores"))
+}
+android.sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("generated/cores"))
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach { dependsOn(stageCores) }
+
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 
 dependencies {

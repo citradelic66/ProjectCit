@@ -46,4 +46,19 @@ class LibraryClassifierTest {
         ), 0L)
         assertEquals("roms/system", idx.bios.getValue(BiosKind.NDS_ARM7).parentPath)
     }
+
+    @Test fun pairsExternalSavesWithRomsInSameFolder() {
+        val idx = LibraryClassifier.classify(sequenceOf(
+            file("Pokemon Emerald.gba", path = "gba"), file("Pokemon Emerald.sav", 131_072, "gba"),
+            file("Mario Kart DS.nds", path = "nds"), file("Mario Kart DS.sav", 512, "nds"), file("Mario Kart DS.srm", 512, "nds"),
+            file("Orphan.sav", 8, "elsewhere"),
+        ), 0L)
+        assertEquals(2, idx.roms.size)
+        assertEquals("Pokemon Emerald.sav", idx.externalSaveFor(idx.roms.first { it.system == ConsoleSystem.GBA })!!.name)
+        assertEquals("Mario Kart DS.srm", idx.externalSaveFor(idx.roms.first { it.system == ConsoleSystem.NDS })!!.name)
+    }
+
+    @Test fun installedCoreNamesSatisfyAndroidExtractionRule() {
+        CoreId.entries.forEach { assertTrue(it.installedFileName.startsWith("lib") && it.installedFileName.endsWith(".so")) }
+    }
 }

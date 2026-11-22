@@ -47,7 +47,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.projectcit.emulator.ProjectCitApp
 import com.projectcit.libretro.NativeBridge
+import com.projectcit.emulator.emulation.CoreRegistry
 import com.projectcit.storage.BiosKind
+import com.projectcit.storage.CoreId
 import com.projectcit.storage.ConsoleSystem
 import com.projectcit.storage.LibraryState
 import com.projectcit.storage.RomEntry
@@ -85,6 +87,7 @@ fun LibraryScreen(onOpenRom: (RomEntry) -> Unit, onOpenLayoutLab: () -> Unit) {
             ) {
                 item { FolderCard(state, onPick = { picker.launch(state.rootUri) }) }
                 item { BiosCard(state) }
+                item { CoresCard() }
                 item {
                     Text(NativeBridge.hostInfo(), style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -157,6 +160,29 @@ private fun BiosCard(state: LibraryState) {
                         Text("${kind.fileName} · ${kind.label}", fontWeight = FontWeight.Medium,
                             style = MaterialTheme.typography.bodyMedium)
                         Text(status, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CoresCard() {
+    val context = LocalContext.current
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Emulator cores", style = MaterialTheme.typography.titleSmall)
+            CoreId.entries.forEach { core ->
+                val installed = CoreRegistry.isInstalled(context, core)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(if (installed) Icons.Default.CheckCircle else Icons.Default.Warning, null,
+                        tint = if (installed) Color(0xFF6BD58B) else MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(8.dp))
+                    Column {
+                        Text(core.displayName, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                        Text(if (installed) "bundled" else "not bundled in this build (${core.installedFileName})",
+                            style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

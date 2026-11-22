@@ -1,6 +1,10 @@
 package com.projectcit.libretro
 
-/** Phase 1: proves the NDK/CMake/JNI path end to end. Phase 2 grows this into the libretro host API. */
+/**
+ * Raw JNI surface of libretrohost.so; use [LibretroCore] instead.
+ * Not `internal`: Kotlin mangles internal names (nativeCreate$module), which breaks JNI lookup.
+ * Handles are opaque native pointers; 0 means "none".
+ */
 object NativeBridge {
     val loadError: Throwable? = runCatching { System.loadLibrary("retrohost") }.exceptionOrNull()
 
@@ -8,4 +12,31 @@ object NativeBridge {
         if (loadError == null) nativeHostInfo() else "native library failed to load: ${loadError.message}"
 
     private external fun nativeHostInfo(): String
+
+    external fun nativeCreate(corePath: String, systemDir: String, saveDir: String,
+                                       keys: Array<String>, values: Array<String>, errorOut: Array<String?>): Long
+    external fun nativeDestroy(h: Long)
+    external fun nativeSystemInfo(h: Long): Array<String>
+    external fun nativeLoadGame(h: Long, path: String, fd: Int, saveName: String, errorOut: Array<String?>): Boolean
+    external fun nativeUnloadGame(h: Long)
+    external fun nativeAvInfo(h: Long): DoubleArray
+    external fun nativeRunFrames(h: Long, n: Int)
+    external fun nativeReset(h: Long)
+    external fun nativeRebindThread(h: Long)
+    external fun nativeSetFastForward(h: Long, on: Boolean)
+    external fun nativeFramesRun(h: Long): Long
+    external fun nativeSetButtons(h: Long, port: Int, mask: Int)
+    external fun nativeSetAnalog(h: Long, port: Int, stick: Int, axis: Int, value: Int)
+    external fun nativeSetPointer(h: Long, x: Int, y: Int, pressed: Boolean)
+    external fun nativeFlushSaveRam(h: Long, errorOut: Array<String?>): Int
+    external fun nativeSaveState(h: Long, path: String, errorOut: Array<String?>): Boolean
+    external fun nativeLoadState(h: Long, path: String, errorOut: Array<String?>): Boolean
+    external fun nativeFrameInfo(h: Long): LongArray?
+    external fun nativeCopyFrameArgb(h: Long): IntArray?
+    external fun nativeReadAudio(h: Long, dst: ShortArray): Int
+    external fun nativeAudioStats(h: Long): LongArray
+    external fun nativeSetOption(h: Long, key: String, value: String): Boolean
+    external fun nativeGetOptions(h: Long): Array<String>
+    external fun nativePollMessage(h: Long): String?
+    external fun nativeRumble(h: Long): IntArray
 }
