@@ -13,7 +13,8 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         externalNativeBuild {
             cmake {
-                cppFlags += listOf("-std=c++17", "-fno-exceptions", "-fno-rtti")
+                // -O2 even in debug: the audio callback and per-frame copies are real-time paths.
+                cppFlags += listOf("-std=c++17", "-fno-rtti", "-O2")
                 arguments += listOf("-DANDROID_STL=c++_shared")
             }
         }
