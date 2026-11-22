@@ -15,3 +15,6 @@ set_target_properties(testcore PROPERTIES PREFIX "")
 add_executable(host_tests host_tests.cpp)
 target_link_libraries(host_tests PRIVATE retrohost_host pthread)
 target_compile_options(host_tests PRIVATE -Wall -Wextra -Werror)
+if (TARGET retrohost_gl)
+    target_link_libraries(host_tests PRIVATE retrohost_gl)  # defines RETROHOST_HAS_GL
+endif ()

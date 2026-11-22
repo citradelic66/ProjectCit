@@ -33,7 +33,24 @@ class LibretroCore private constructor(private var handle: Long) : AutoCloseable
         }
     }
 
-    private fun h(): Long = handle.also { check(it != 0L) { "LibretroCore is closed" } }
+    internal fun h(): Long = handle.also { check(it != 0L) { "LibretroCore is closed" } }
+
+    private var runner: EmulationRunner? = null
+
+    /**
+     * Hands this core to a dedicated native emulation thread (see [EmulationRunner]).
+     * While it runs, direct core calls from other threads are refused natively;
+     * use the runner's methods instead.
+     */
+    fun createRunner(): EmulationRunner {
+        check(runner == null) { "a runner is already attached" }
+        return EmulationRunner(this, NativeBridge.nativeRunnerCreate(h())).also { runner = it }
+    }
+
+    internal fun onRunnerClosed() {
+        runner = null
+        NativeBridge.nativeRebindThread(h())  // core belongs to the caller again
+    }
 
     val systemInfo: CoreSystemInfo by lazy {
         val a = NativeBridge.nativeSystemInfo(h())
@@ -131,6 +148,8 @@ class LibretroCore private constructor(private var handle: Long) : AutoCloseable
     /** Flushes the battery save, unloads the game and dlcloses the core. */
     override fun close() {
         if (handle == 0L) return
+        runner?.close()
+        NativeBridge.nativeRebindThread(handle)  // teardown (incl. final .srm flush) runs on this thread
         NativeBridge.nativeDestroy(handle)
         handle = 0L
         gameLoaded = false

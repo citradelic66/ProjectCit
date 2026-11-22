@@ -26,7 +26,13 @@ public:
     /** x/y already normalized to libretro space [-0x7fff, 0x7fff] over the core's whole video frame. */
     void setPointer(int16_t x, int16_t y, bool pressed) {
         pointer_.store(pack(x, y, pressed), std::memory_order_relaxed);
+        // A tap shorter than one frame (16.7 ms) would otherwise never be seen by the
+        // core: latch the press (and where it happened) until a frame has consumed it.
+        if (pressed) latched_.store(pack(x, y, true), std::memory_order_relaxed);
     }
+
+    /** Called after each retro_run: the latched press has been observed. */
+    void endFrame() { latched_.store(0, std::memory_order_relaxed); }
 
     int16_t state(unsigned port, unsigned device, unsigned index, unsigned id) const {
         if (port >= kPorts) return 0;
@@ -41,7 +47,11 @@ public:
                 return 0;
             case RETRO_DEVICE_POINTER: {
                 if (port != 0 || index != 0) return 0;  // single touch point
-                const uint64_t p = pointer_.load(std::memory_order_relaxed);
+                uint64_t p = pointer_.load(std::memory_order_relaxed);
+                if (!((p >> 32) & 1)) {
+                    const uint64_t l = latched_.load(std::memory_order_relaxed);
+                    if ((l >> 32) & 1) p = l;  // released already, but this frame hasn't seen the tap yet
+                }
                 const bool pressed = (p >> 32) & 1;
                 switch (id) {
                     case RETRO_DEVICE_ID_POINTER_X: return static_cast<int16_t>(p & 0xFFFF);
@@ -67,6 +77,7 @@ private:
     std::atomic<uint32_t> buttons_[kPorts]{};
     std::atomic<int16_t> analog_[kPorts][2][2]{};
     std::atomic<uint64_t> pointer_{0};
+    std::atomic<uint64_t> latched_{0};
 };
 
 }  // namespace retrohost

@@ -3,6 +3,7 @@ package com.projectcit.emulator.emulation
 import android.content.Context
 import android.net.Uri
 import com.projectcit.libretro.ContentGame
+import com.projectcit.libretro.EmulationRunner
 import com.projectcit.libretro.LibretroCore
 import com.projectcit.libretro.LibretroException
 import com.projectcit.storage.CoreId
@@ -12,8 +13,9 @@ import java.io.Closeable
 import java.io.File
 
 /**
- * Core + game + persistence for one play session.
- * Create and use it only on the emulation thread (Phase 3 owns that thread).
+ * Core + game + emulation thread + persistence for one play session.
+ * After [startRunner], the native emulation thread owns the core; every method
+ * here is then safe from any thread.
  */
 class GameSession private constructor(
     val rom: RomEntry,
@@ -26,21 +28,33 @@ class GameSession private constructor(
 
     val contentStrategy: ContentGame.Strategy get() = content.strategy
 
+    var runner: EmulationRunner? = null
+        private set
+
+    fun startRunner(): EmulationRunner = core.createRunner().also { it.start(); runner = it }
+
     /** Writes the state and its PNG thumbnail (taken from the last displayed frame). */
     fun saveState(slot: Int) {
-        core.saveState(slots.stateFile(slot))
-        core.copyFrameArgb()?.let { slots.writeThumbnail(slot, it) }
+        val file = slots.stateFile(slot)
+        runner?.saveState(file) ?: core.saveState(file)
+        core.copyFrameArgb()?.let { slots.writeThumbnail(slot, it) }  // frame reads are thread-safe
     }
 
     fun loadState(slot: Int) {
         val f = slots.stateFile(slot)
         if (!f.exists()) throw LibretroException("slot $slot is empty")
-        core.loadState(f)
+        runner?.loadState(f) ?: core.loadState(f)
     }
 
-    /** Flushes the battery save, unloads and releases the ROM descriptor. */
+    /** Stops the emulation thread, flushes the battery save, unloads, releases the ROM descriptor. */
     override fun close() {
-        try { core.close() } finally { content.close() }
+        try {
+            runner?.close()
+            runner = null
+            core.close()
+        } finally {
+            content.close()
+        }
     }
 
     companion object {

@@ -46,7 +46,21 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.projectcit.emulator.ProjectCitApp
+import com.projectcit.emulator.emulation.EmulationController
 import com.projectcit.emulator.posture.PostureSource
+import com.projectcit.layout.PointerMapper
+import com.projectcit.layout.PointerSample
+import com.projectcit.libretro.RunnerStats
+import kotlinx.coroutines.delay
 import com.projectcit.emulator.posture.RawFold
 import com.projectcit.emulator.posture.foldingFeature
 import com.projectcit.emulator.posture.rememberGamepadConnected
@@ -69,7 +83,12 @@ enum class ControllerMode { AUTO, FORCE_ON, FORCE_OFF }
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SessionScreen(initialPlatform: Platform, romTitle: String?, onExit: () -> Unit) {
+fun SessionScreen(initialPlatform: Platform, romTitle: String?, isGame: Boolean, onExit: () -> Unit) {
+    val app = LocalContext.current.applicationContext as ProjectCitApp
+    val emu = app.emulation
+    val emuState by emu.state.collectAsStateWithLifecycle()
+    val running = isGame && emuState is EmulationController.State.Running
+    var stats by remember { mutableStateOf<RunnerStats?>(null) }
     var platform by rememberSaveable { mutableStateOf(initialPlatform) }
     var bookMode by rememberSaveable { mutableStateOf(NdsBookMode.SIDE_BY_SIDE) }
     var emphasis by rememberSaveable { mutableStateOf(NdsEmphasis.BALANCED) }
@@ -80,6 +99,10 @@ fun SessionScreen(initialPlatform: Platform, romTitle: String?, onExit: () -> Un
     var overlay by rememberSaveable { mutableStateOf(true) }
     var hudExpanded by rememberSaveable { mutableStateOf(true) }
     var showSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(overlay, running) {
+        while (overlay && running) { stats = emu.stats(); delay(500) }
+    }
 
     var origin by remember { mutableStateOf(Offset.Zero) }
     var size by remember { mutableStateOf(IntSize.Zero) }
@@ -92,21 +115,37 @@ fun SessionScreen(initialPlatform: Platform, romTitle: String?, onExit: () -> Un
     }
 
     Box(
-        Modifier.fillMaxSize().background(Color.Black)
+        Modifier.fillMaxSize().then(if (isGame) Modifier else Modifier.background(Color.Black))
             .onGloballyPositioned { origin = it.positionInWindow(); size = it.size },
     ) {
+        if (isGame) GameSurface(emu, Modifier.fillMaxSize())
         if (size != IntSize.Zero) {
             val window = rememberWindowSpec(info, origin, size, source)
             val options = LayoutOptions(platform, bookMode, emphasis, swap, integer, controller)
             val spec = remember(window, options) { LayoutEngine.compute(window, options) }
-            LayoutCanvas(spec, platform, overlay, Modifier.fillMaxSize())
+            // Every layout change (fold, rotate, option) re-targets the GL quads.
+            LaunchedEffect(spec) { emu.setViewports(spec.screens) }
+            LayoutCanvas(
+                spec, platform, overlay, drawScreens = !running,
+                modifier = Modifier.fillMaxSize().pointerInput(spec, running) { if (running) touchToPointer(spec, emu) },
+            )
             if (overlay) {
                 Hud(
-                    spec, platform, window, info.foldingFeature()?.toRaw(), source, gamepadAttached, romTitle, hudExpanded,
+                    spec, platform, window, info.foldingFeature()?.toRaw(), source, gamepadAttached, romTitle, stats, hudExpanded,
                     onToggle = { hudExpanded = !hudExpanded },
                     modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp),
                 )
             }
+        }
+        when (val st = emuState) {
+            is EmulationController.State.Loading -> if (isGame) CircularProgressIndicator(Modifier.align(Alignment.Center))
+            is EmulationController.State.Failed -> if (isGame) Text(
+                "Could not start ${st.rom.title}:\n${st.message}",
+                color = Color.White,
+                modifier = Modifier.align(Alignment.Center).padding(24.dp)
+                    .background(Color(0xDD3A0000), RoundedCornerShape(8.dp)).padding(16.dp),
+            )
+            else -> Unit
         }
         Row(
             Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp),
@@ -173,10 +212,15 @@ private fun OptionsSheet(
 @Composable
 private fun Hud(
     spec: LayoutSpec, platform: Platform, window: WindowSpec, raw: RawFold?, source: PostureSource, gamepad: Boolean,
-    romTitle: String?, expanded: Boolean, onToggle: () -> Unit, modifier: Modifier,
+    romTitle: String?, stats: RunnerStats?, expanded: Boolean, onToggle: () -> Unit, modifier: Modifier,
 ) {
     val lines = buildList {
         add("${spec.posture}  ·  ${romTitle ?: "Layout lab"}")
+        stats?.let { st ->
+            add("%.2f/%.2f fps · audio %.0f fr · drc %.4f · %d Hz · underruns %d%s".format(
+                st.measuredFps, st.targetFps, st.audioBufferedFrames, st.drcRatio, st.deviceSampleRate, st.audioUnderruns,
+                if (st.paused) " · PAUSED" else ""))
+        }
         if (expanded) {
             add("window %.0f×%.0f dp  w=%s h=%s".format(window.widthDp, window.heightDp, window.widthClass, window.heightClass))
             add(
@@ -197,5 +241,27 @@ private fun Hud(
             .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
         lines.forEach { Text(it, color = Color(0xFFE0F7FF), fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 13.sp) }
+    }
+}
+
+/**
+ * Stylus/finger on the DS touchscreen quad -> RETRO_DEVICE_POINTER. A touch that
+ * starts on the touchscreen keeps tracking (clamped to the edge) if it slides off,
+ * like a real stylus on the bezel; touches starting elsewhere are left for the
+ * Phase 4 controls.
+ */
+private suspend fun PointerInputScope.touchToPointer(spec: LayoutSpec, emu: EmulationController) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val first = PointerMapper.map(down.position.x, down.position.y, spec) ?: return@awaitEachGesture
+        emu.setPointer(first)
+        while (true) {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            if (!change.pressed) break
+            PointerMapper.map(change.position.x, change.position.y, spec, clampToEdge = true)?.let(emu::setPointer)
+            change.consume()
+        }
+        emu.setPointer(PointerSample.RELEASED)
     }
 }

@@ -39,4 +39,17 @@ object NativeBridge {
     external fun nativeGetOptions(h: Long): Array<String>
     external fun nativePollMessage(h: Long): String?
     external fun nativeRumble(h: Long): IntArray
+
+    external fun nativeRunnerCreate(hostHandle: Long): Long
+    external fun nativeRunnerStart(r: Long, errorOut: Array<String?>): Boolean
+    external fun nativeRunnerDestroy(r: Long)
+    external fun nativeRunnerSetPaused(r: Long, paused: Boolean)
+    external fun nativeRunnerSetSpeed(r: Long, speed: Double)
+    external fun nativeRunnerReset(r: Long)
+    external fun nativeRunnerSetViewports(r: Long, quads: FloatArray)
+    external fun nativeRunnerSetSurface(r: Long, surface: android.view.Surface?)
+    external fun nativeRunnerSaveState(r: Long, path: String, errorOut: Array<String?>): Boolean
+    external fun nativeRunnerLoadState(r: Long, path: String, errorOut: Array<String?>): Boolean
+    external fun nativeRunnerFlushSaveRam(r: Long, errorOut: Array<String?>): Boolean
+    external fun nativeRunnerStats(r: Long): DoubleArray
 }

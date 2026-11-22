@@ -40,7 +40,7 @@ class LibretroCoreJniTest {
         LibretroCore.open(testCore!!.path, tmp.newFolder(), tmp.newFolder(), overrides)
 
     @Test fun hostInfoComesFromNative() {
-        assertTrue(NativeBridge.hostInfo().startsWith("retrohost 0.2.0"))
+        assertTrue(NativeBridge.hostInfo().startsWith("retrohost 0.3.0"))
     }
 
     @Test fun badCorePathThrowsReadableError() {
@@ -102,6 +102,44 @@ class LibretroCoreJniTest {
             val bad = assertThrows(LibretroException::class.java) { core.loadState(state) }
             assertTrue(bad.message!!.contains("ProjectCit save state") || bad.message!!.contains("truncated"))
         }
+    }
+
+    @Test fun runnerPacesAtConsoleRateAndHandsCoreBack() {
+        val rom = tmp.newFile("Zelda.tst").apply { writeBytes(byteArrayOf(9)) }
+        openFake().use { core ->
+            core.loadGame(rom.path)
+            val runner = core.createRunner()
+            runner.setViewports(floatArrayOf(0f, 0f, 256f, 384f, 0f, 0f, 1f, 1f))
+            runner.start()
+            runner.setSurface(null)
+            Thread.sleep(2200)
+            val s = runner.stats()
+            assertEquals(59.8261, s.measuredFps, 0.3)
+            assertEquals(59.8261, s.targetFps, 1e-3)
+            assertFalse(s.hasSurface)
+            val state = File(tmp.root, "runner.state")
+            runner.saveState(state)               // executed on the emulation thread
+            assertThrows(LibretroException::class.java) { core.saveState(File(tmp.root, "direct.state")) } // refused: not owner
+            runner.setPaused(true)
+            Thread.sleep(150)
+            val frozen = runner.stats().framesRun
+            Thread.sleep(300)
+            assertEquals(frozen, runner.stats().framesRun)
+            runner.loadState(state)
+            runner.close()
+            core.saveState(File(tmp.root, "direct.state")) // owner again after close
+            core.runFrame()
+        }
+    }
+
+    @Test fun closingCoreStopsItsRunner() {
+        val rom = tmp.newFile("Metroid.tst").apply { writeBytes(byteArrayOf(9)) }
+        val core = openFake()
+        core.loadGame(rom.path)
+        core.createRunner().start()
+        Thread.sleep(200)
+        core.close() // must stop the thread first, then tear down on this thread
+        assertThrows(IllegalStateException::class.java) { core.runFrame() }
     }
 
     @Test fun closedCoreRejectsCalls() {

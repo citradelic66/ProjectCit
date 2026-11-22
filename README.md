@@ -3,14 +3,14 @@
 Libretro-based GBA / GB / GBC / Nintendo DS emulator for Android, built for candybar
 phones and book-style foldables (Galaxy Z Fold).
 
-## Status: Phase 2 of 4
+## Status: Phase 3 of 4
 
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Gradle/NDK setup, SAF ROM + BIOS indexer, posture-aware layout engine, hinge visualizer | ✅ done |
 | 2 | C++17 libretro host (`dlopen`), pointer input bridge, save/state serialization, JNI | ✅ done |
-| 3 | EGL / GLES 3.0 single + dual-quad renderer, Oboe audio, lifecycle-free emu thread | next |
-| 4 | Touch gamepad overlay, HID mapping, haptics, fast-forward, save-state UI | |
+| 3 | EGL / GLES 3.0 single + dual-quad renderer, Oboe audio, lifecycle-free emu thread | ✅ done |
+| 4 | Touch gamepad overlay, HID mapping, haptics, fast-forward, save-state UI | next |
 
 ## Modules
 
@@ -19,7 +19,7 @@ phones and book-style foldables (Galaxy Z Fold).
 | `:app` | Compose UI: library, session shell, WindowManager posture adapter, gamepad detection |
 | `:core:layout` | **Pure Kotlin/JVM** layout engine: (window, hinge, insets, options) → screen quads + control zones. Fully unit-tested. |
 | `:core:storage` | SAF tree walker, ROM/BIOS classifier, `system/` BIOS mirror, cached index |
-| `:core:libretro` | C++17 libretro host (`libretrohost.so`): `dlopen` loader, environment, core options v0–v2, pointer/joypad input, battery saves, CRC-checked save states, frame + audio buffers. Kotlin API: `LibretroCore`, `ContentGame`. |
+| `:core:libretro` | Native emulation thread (`EmuRunner`: console-rate pacing, EGL/GLES 3.0 dual-quad renderer, Oboe audio with dynamic rate control) on top of the C++17 libretro host (`libretrohost.so`): `dlopen` loader, environment, core options v0–v2, pointer/joypad input, battery saves, CRC-checked save states, frame + audio buffers. Kotlin API: `LibretroCore`, `ContentGame`. |
 
 ## Build
 
@@ -34,6 +34,21 @@ Requirements: JDK 17+ (Android Studio's bundled JDK 21 works), Android SDK 36, N
 Add `-PmgbaCore=/path/to/mgba_libretro.so` (a Linux build of mGBA's libretro core) to also run
 the real-core tests: a hand-assembled GBA ROM boots, writes cartridge SRAM, and the host
 persists it to `.srm` and round-trips save states.
+
+The GL renderer tests need Mesa's EGL/GLES on Linux (`apt-get install libegl-dev libgles-dev libegl-mesa0`);
+without it they are skipped and everything else still runs.
+
+### How a session runs
+```
+UI thread ──surface / viewports / touch──▶ EmulationController (process-scoped)
+                                                 │
+                                   EmuRunner thread (native, one per game)
+                                   ├─ retro_run() paced at 59.7275 / 59.8261 Hz
+                                   ├─ EGL context (survives surface loss) → GLES 3.0 quads
+                                   └─ AudioRing ─▶ Oboe callback: resample + dynamic rate control
+```
+Folding, rotating or recreating the Activity only swaps the Surface; the game never stops.
+Backgrounding the app pauses, flushes the battery save and writes an automatic save state.
 
 ### Bundling cores
 Cores are not committed. Drop the Android builds into `app/cores/<abi>/` (see

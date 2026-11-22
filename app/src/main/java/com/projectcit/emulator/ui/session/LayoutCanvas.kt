@@ -31,7 +31,7 @@ private val MainColor = Color(0xFF9BE58B)
 private val HingeColor = Color(0xFFFF4D4D)
 
 @Composable
-fun LayoutCanvas(spec: LayoutSpec, platform: Platform, overlay: Boolean, modifier: Modifier) {
+fun LayoutCanvas(spec: LayoutSpec, platform: Platform, overlay: Boolean, drawScreens: Boolean, modifier: Modifier) {
     val tm = rememberTextMeasurer()
     Canvas(modifier) {
         if (overlay) {
@@ -56,6 +56,12 @@ fun LayoutCanvas(spec: LayoutSpec, platform: Platform, overlay: Boolean, modifie
         }
         spec.screens.forEach { s ->
             val color = when (s.role) { ScreenRole.TOP -> TopColor; ScreenRole.BOTTOM -> BottomColor; ScreenRole.MAIN -> MainColor }
+            // While a game runs, the GL surface underneath shows the real screens;
+            // only outline them (debug overlay) so the picture stays visible.
+            if (!drawScreens) {
+                if (overlay) drawRect(color, s.rect.offset(), s.rect.size(), style = Stroke(2f))
+                return@forEach
+            }
             drawRect(color.copy(alpha = 0.16f), s.rect.offset(), s.rect.size())
             drawPixelGrid(s.rect, platform, color)
             drawRect(color, s.rect.offset(), s.rect.size(), style = Stroke(3f))

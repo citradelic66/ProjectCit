@@ -129,6 +129,7 @@ void RetroHost::runFrame() {
         audioStatusCb_.callback(true, static_cast<unsigned>(fill * 100.0), fill < 0.25);
     }
     core_->run();
+    input_.endFrame();
     ++framesRun_;
 }
 

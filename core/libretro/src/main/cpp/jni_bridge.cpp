@@ -6,13 +6,22 @@
 #include <string>
 #include <vector>
 
+#include "host/EmuRunner.h"
 #include "host/Log.h"
 #include "host/RetroHost.h"
 
+#if defined(__ANDROID__)
+#include <android/native_window_jni.h>
+
+#include "android/OboeAudioOutput.h"
+#include "gl/EglVideoOutput.h"
+#endif
+
+using retrohost::EmuRunner;
 using retrohost::RetroHost;
 
 namespace {
-constexpr const char* kHostVersion = "0.2.0-phase2";
+constexpr const char* kHostVersion = "0.3.0-phase3";
 
 constexpr const char* abiName() {
 #if defined(__aarch64__)
@@ -29,6 +38,7 @@ constexpr const char* abiName() {
 }
 
 RetroHost* H(jlong h) { return reinterpret_cast<RetroHost*>(h); }
+EmuRunner* R(jlong r) { return reinterpret_cast<EmuRunner*>(r); }
 
 std::string str(JNIEnv* env, jstring s) {
     if (!s) return {};
@@ -225,5 +235,80 @@ JNI_FN(jintArray, nativeRumble)(JNIEnv* env, jobject, jlong h) {
     const jint v[2] = {H(h)->rumble().strong.load(), H(h)->rumble().weak.load()};
     jintArray arr = env->NewIntArray(2);
     env->SetIntArrayRegion(arr, 0, 2, v);
+    return arr;
+}
+
+// ------------------------------------------------------------------ emulation runner
+
+JNI_FN(jlong, nativeRunnerCreate)(JNIEnv*, jobject, jlong hostHandle) {
+#if defined(__ANDROID__)
+    auto video = std::make_unique<retrohost::EglVideoOutput>();
+    auto audio = std::make_unique<retrohost::OboeAudioOutput>();
+#else
+    // Host (JVM test) build: no window system, no audio device.
+    auto video = std::make_unique<retrohost::NullVideoOutput>();
+    auto audio = std::make_unique<retrohost::NullAudioOutput>();
+#endif
+    return reinterpret_cast<jlong>(new EmuRunner(H(hostHandle), std::move(video), std::move(audio)));
+}
+
+JNI_FN(jboolean, nativeRunnerStart)(JNIEnv* env, jobject, jlong r, jobjectArray errOut) {
+    std::string error;
+    if (!R(r)->start(error)) { setError(env, errOut, error); return JNI_FALSE; }
+    return JNI_TRUE;
+}
+
+JNI_FN(void, nativeRunnerDestroy)(JNIEnv*, jobject, jlong r) { delete R(r); }
+JNI_FN(void, nativeRunnerSetPaused)(JNIEnv*, jobject, jlong r, jboolean p) { R(r)->setPaused(p); }
+JNI_FN(void, nativeRunnerSetSpeed)(JNIEnv*, jobject, jlong r, jdouble s) { R(r)->setSpeed(s); }
+JNI_FN(void, nativeRunnerReset)(JNIEnv*, jobject, jlong r) { R(r)->reset(); }
+
+/** quads: 8 floats each = x, y, w, h (surface px) then u0, v0, u1, v1. */
+JNI_FN(void, nativeRunnerSetViewports)(JNIEnv* env, jobject, jlong r, jfloatArray quads) {
+    const jsize n = env->GetArrayLength(quads) / 8;
+    std::vector<retrohost::Quad> q(static_cast<size_t>(n));
+    if (n > 0) env->GetFloatArrayRegion(quads, 0, n * 8, reinterpret_cast<jfloat*>(q.data()));
+    R(r)->setViewports(std::move(q));
+}
+
+/** Blocks until the emulation thread has switched surfaces (required by surfaceDestroyed). */
+JNI_FN(void, nativeRunnerSetSurface)(JNIEnv* env, jobject, jlong r, jobject surface) {
+#if defined(__ANDROID__)
+    ANativeWindow* window = surface ? ANativeWindow_fromSurface(env, surface) : nullptr;  // +1 ref, owned by the output
+    R(r)->setWindow(window);
+#else
+    (void)env;
+    R(r)->setWindow(surface ? reinterpret_cast<void*>(1) : nullptr);
+#endif
+}
+
+JNI_FN(jboolean, nativeRunnerSaveState)(JNIEnv* env, jobject, jlong r, jstring path, jobjectArray errOut) {
+    std::string error;
+    if (!R(r)->saveState(str(env, path), error)) { setError(env, errOut, error); return JNI_FALSE; }
+    return JNI_TRUE;
+}
+
+JNI_FN(jboolean, nativeRunnerLoadState)(JNIEnv* env, jobject, jlong r, jstring path, jobjectArray errOut) {
+    std::string error;
+    if (!R(r)->loadState(str(env, path), error)) { setError(env, errOut, error); return JNI_FALSE; }
+    return JNI_TRUE;
+}
+
+JNI_FN(jboolean, nativeRunnerFlushSaveRam)(JNIEnv* env, jobject, jlong r, jobjectArray errOut) {
+    std::string error;
+    if (!R(r)->flushSaveRam(error)) { setError(env, errOut, error); return JNI_FALSE; }
+    return JNI_TRUE;
+}
+
+/** [framesRun, presented, measuredFps, targetFps, audioFill, underruns, dropped, drcRatio,
+ *   paused, hasWindow, coreShutdown, deviceRate, pacerResyncs] */
+JNI_FN(jdoubleArray, nativeRunnerStats)(JNIEnv* env, jobject, jlong r) {
+    const auto s = R(r)->stats();
+    const jdouble v[13] = {static_cast<double>(s.framesRun), static_cast<double>(s.presented), s.measuredFps, s.targetFps,
+                           s.audioFillFrames, static_cast<double>(s.audioUnderruns), static_cast<double>(s.audioDropped),
+                           s.drcRatio, s.paused ? 1.0 : 0.0, s.hasWindow ? 1.0 : 0.0, s.coreRequestedShutdown ? 1.0 : 0.0,
+                           static_cast<double>(s.deviceSampleRate), static_cast<double>(s.pacerResyncs)};
+    jdoubleArray arr = env->NewDoubleArray(13);
+    env->SetDoubleArrayRegion(arr, 0, 13, v);
     return arr;
 }
