@@ -23,6 +23,12 @@ object Devices {
 
     val foldFlatLandscape = foldTabletop.copy(hinge = foldTabletop.hinge!!.copy(state = HingeState.FLAT))
 
+    /** Measured on the user's unfolded Fold (debug overlay): 750×832 dp, zero-width hinge at x=984 px. */
+    val fold7Inner = WindowSpec(
+        1968f, 2184f, D, Insets(0f, 63f, 0f, 63f),
+        HingeInfo(Rect(984f, 0f, 984f, 2184f), HingeOrientation.VERTICAL, HingeState.FLAT, isSeparating = false, occludes = false),
+    )
+
     /** Dual-panel device with a physical, occluding gap. */
     val dualPanelBook = WindowSpec(
         2784f, 1800f, 2.5f, Insets.ZERO,
@@ -31,5 +37,5 @@ object Devices {
     )
 
     val all = listOf(candybar, candybarLandscape, foldCover, foldInner(HingeState.FLAT),
-        foldInner(HingeState.HALF_OPENED), foldTabletop, foldFlatLandscape, dualPanelBook)
+        foldInner(HingeState.HALF_OPENED), foldTabletop, foldFlatLandscape, dualPanelBook, fold7Inner)
 }

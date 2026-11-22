@@ -86,6 +86,16 @@ class EmulationController(private val context: Context, private val systemDir: F
 
     val isRunning: Boolean get() = state.value is State.Running
 
+    /**
+     * Real size of the core's last frame (width, height). Single-screen cores can
+     * change it at runtime: mGBA switches a Super Game Boy game to 256×224 when its
+     * border appears. The layout follows it so the picture is never stretched.
+     */
+    private val _frameSize = MutableStateFlow<Pair<Int, Int>?>(null)
+    val frameSize: StateFlow<Pair<Int, Int>?> = _frameSize.asStateFlow()
+    private var frameWatch: kotlinx.coroutines.Job? = null
+    private val watchScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     val currentRomUri: String? get() = (state.value as? State.Running)?.rom?.uri ?: (state.value as? State.Loading)?.rom?.uri
 
     fun start(rom: RomEntry, index: LibraryIndex) {
@@ -104,6 +114,14 @@ class EmulationController(private val context: Context, private val systemDir: F
                     touchMask = 0; physicalMask = 0; ffToggle = false; ffHeld = false; _fastForward.value = false
                     physical.reset()
                 }
+                _frameSize.value = null
+                frameWatch = watchScope.launch {
+                    while (true) {
+                        val f = runCatching { synchronized(lock) { session?.core?.frameInfo() } }.getOrNull()
+                        if (f != null && (f.width to f.height) != _frameSize.value) _frameSize.value = f.width to f.height
+                        kotlinx.coroutines.delay(250)
+                    }
+                }
                 Log.i(TAG, "started ${rom.title} with ${s.coreId.displayName} (${s.contentStrategy}, imported save: ${s.importedSave})")
                 _state.value = State.Running(rom, userPaused = false)
             } catch (e: Exception) {
@@ -118,6 +136,9 @@ class EmulationController(private val context: Context, private val systemDir: F
     }
 
     private fun stopInternal() {
+        frameWatch?.cancel()
+        frameWatch = null
+        _frameSize.value = null
         val s = synchronized(lock) { session.also { session = null } } ?: run { _state.value = State.Idle; return }
         runCatching { s.close() }.onFailure { Log.e(TAG, "close failed", it) }
         _state.value = State.Idle

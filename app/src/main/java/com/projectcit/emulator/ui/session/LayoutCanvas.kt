@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import com.projectcit.layout.ControlCluster
 import com.projectcit.layout.HingeOrientation
 import com.projectcit.layout.LayoutEngine
+import com.projectcit.layout.LayoutOptions
 import com.projectcit.layout.LayoutSpec
 import com.projectcit.layout.Platform
 import com.projectcit.layout.Rect
@@ -31,7 +32,8 @@ private val MainColor = Color(0xFF9BE58B)
 private val HingeColor = Color(0xFFFF4D4D)
 
 @Composable
-fun LayoutCanvas(spec: LayoutSpec, platform: Platform, overlay: Boolean, drawScreens: Boolean, modifier: Modifier) {
+fun LayoutCanvas(spec: LayoutSpec, options: LayoutOptions, overlay: Boolean, drawScreens: Boolean, modifier: Modifier) {
+    val platform = options.platform
     val tm = rememberTextMeasurer()
     Canvas(modifier) {
         if (overlay) {
@@ -63,11 +65,11 @@ fun LayoutCanvas(spec: LayoutSpec, platform: Platform, overlay: Boolean, drawScr
                 return@forEach
             }
             drawRect(color.copy(alpha = 0.16f), s.rect.offset(), s.rect.size())
-            drawPixelGrid(s.rect, platform, color)
+            drawPixelGrid(s.rect, options.sourceWidth, color)
             drawRect(color, s.rect.offset(), s.rect.size(), style = Stroke(3f))
-            val scale = s.rect.width / platform.screenWidth
+            val scale = s.rect.width / options.sourceWidth
             val text = buildString {
-                append(s.role.name).append(" ").append(platform.screenWidth).append('×').append(platform.screenHeight)
+                append(s.role.name).append(" ").append(options.sourceWidth).append('×').append(options.sourceHeight)
                 append(" ×").append("%.2f".format(scale))
                 if (s.acceptsTouch) append(" · touch")
             }
@@ -98,8 +100,8 @@ fun LayoutCanvas(spec: LayoutSpec, platform: Platform, overlay: Boolean, drawScr
 }
 
 /** One faint line every 16 native pixels, so the effective scale factor is visible at a glance. */
-private fun DrawScope.drawPixelGrid(r: Rect, platform: Platform, color: Color) {
-    val step = r.width / platform.screenWidth * 16f
+private fun DrawScope.drawPixelGrid(r: Rect, sourceWidth: Int, color: Color) {
+    val step = r.width / sourceWidth * 16f
     if (step < 6f) return
     val c = color.copy(alpha = 0.18f)
     var x = r.left + step

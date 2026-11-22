@@ -86,7 +86,20 @@ data class LayoutOptions(
     val integerScaling: Boolean = false,
     /** When a gamepad is connected the touch controls disappear and screens grow. */
     val physicalController: Boolean = false,
-)
+    /**
+     * Actual size of the core's video frame for single-screen systems, when known.
+     * mGBA outputs 256×224 (game + Super Game Boy border) for SGB-enhanced Game Boy
+     * games, not 160×144; laying out with the nominal size would stretch the image.
+     */
+    val frameWidth: Int = 0,
+    val frameHeight: Int = 0,
+    /** Number of round toolbar buttons (fast-forward, swap, layout, menu) to place; 0 = none. */
+    val toolbarButtons: Int = 0,
+) {
+    /** Source size of one screen: the real frame when known (single-screen), else the console's native size. */
+    val sourceWidth: Int get() = if (!platform.isDualScreen && frameWidth > 0 && frameHeight > 0) frameWidth else platform.screenWidth
+    val sourceHeight: Int get() = if (!platform.isDualScreen && frameWidth > 0 && frameHeight > 0) frameHeight else platform.screenHeight
+}
 
 enum class ScreenRole { MAIN, TOP, BOTTOM }
 
@@ -118,6 +131,8 @@ data class LayoutSpec(
     val hinge: HingeInfo?,
     val screens: List<ScreenViewport>,
     val controls: List<ControlZone>,
+    /** Where the toolbar goes; never overlaps a screen, a control zone or the hinge. Taller than wide = vertical column. */
+    val toolbar: Rect? = null,
 ) {
     fun screen(role: ScreenRole): ScreenViewport? = screens.firstOrNull { it.role == role }
 }

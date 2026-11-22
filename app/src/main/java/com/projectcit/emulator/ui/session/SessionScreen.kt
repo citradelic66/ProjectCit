@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -47,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -93,6 +95,7 @@ fun SessionScreen(initialPlatform: Platform, romTitle: String?, isGame: Boolean,
     val emuState by emu.state.collectAsStateWithLifecycle()
     val settings by app.sessionSettings.values.collectAsStateWithLifecycle()
     val fastForward by emu.fastForward.collectAsStateWithLifecycle()
+    val frameSize by emu.frameSize.collectAsStateWithLifecycle()
     val running = isGame && emuState is EmulationController.State.Running
     val scope = rememberCoroutineScope()
     val view = LocalView.current
@@ -139,7 +142,12 @@ fun SessionScreen(initialPlatform: Platform, romTitle: String?, isGame: Boolean,
         if (isGame) GameSurface(emu, Modifier.fillMaxSize())
         if (size != IntSize.Zero) {
             val window = rememberWindowSpec(info, origin, size, source)
-            val options = LayoutOptions(platform, settings.ndsBookMode, settings.ndsEmphasis, settings.swapScreens, settings.integerScaling, controller)
+            val toolbarButtons = (if (isGame) 2 else 1) + (if (platform.isDualScreen) 2 else 0)
+            val frame = frameSize.takeIf { running }
+            val options = LayoutOptions(
+                platform, settings.ndsBookMode, settings.ndsEmphasis, settings.swapScreens, settings.integerScaling, controller,
+                frameWidth = frame?.first ?: 0, frameHeight = frame?.second ?: 0, toolbarButtons = toolbarButtons,
+            )
             val spec = remember(window, options) { LayoutEngine.compute(window, options) }
             val pad = remember(spec, platform) { VirtualPadBuilder.build(spec, platform, density) }
             val router = remember {
@@ -154,7 +162,7 @@ fun SessionScreen(initialPlatform: Platform, romTitle: String?, isGame: Boolean,
             }
             LaunchedEffect(spec) { emu.setViewports(spec.screens) }  // fold/rotate/option -> new GL quads
             LaunchedEffect(spec, pad) { router.setLayout(spec, pad) }
-            LayoutCanvas(spec, platform, overlay, drawScreens = !running, modifier = Modifier.fillMaxSize())
+            LayoutCanvas(spec, options, overlay, drawScreens = !running, modifier = Modifier.fillMaxSize())
             if (isGame) {
                 VirtualPadOverlay(
                     pad, padMask, settings.padOpacity,
@@ -163,13 +171,13 @@ fun SessionScreen(initialPlatform: Platform, romTitle: String?, isGame: Boolean,
             }
             if (overlay) {
                 Hud(
-                    spec, platform, window, info.foldingFeature()?.toRaw(), source, gamepadAttached, romTitle, stats, hudExpanded,
+                    spec, options, window, info.foldingFeature()?.toRaw(), source, gamepadAttached, romTitle, stats, hudExpanded,
                     onToggle = { hudExpanded = !hudExpanded },
                     modifier = Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp),
                 )
             }
             HotkeyBar(
-                isGame = isGame, platform = platform, fastForward = fastForward,
+                isGame = isGame, platform = platform, fastForward = fastForward, slot = spec.toolbar,
                 onFastForward = { emu.setFastForwardToggle(!fastForward) },
                 onSwap = { app.sessionSettings.update { it.copy(swapScreens = !it.swapScreens) } },
                 onCycleLayout = {
@@ -182,7 +190,6 @@ fun SessionScreen(initialPlatform: Platform, romTitle: String?, isGame: Boolean,
                     }
                 },
                 onMenu = { menuOpen = true },
-                modifier = Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(6.dp),
             )
         }
         when (val st = emuState) {
@@ -230,25 +237,40 @@ fun SessionScreen(initialPlatform: Platform, romTitle: String?, isGame: Boolean,
     }
 }
 
-/** Small always-visible buttons: fast-forward, DS swap / layout, menu. */
+/**
+ * Small always-visible buttons: fast-forward, DS swap / layout, menu. Placed in the
+ * slot the layout engine reserved (never over a screen, a control or the hinge);
+ * a slot taller than wide becomes a column.
+ */
 @Composable
 private fun HotkeyBar(
-    isGame: Boolean, platform: Platform, fastForward: Boolean,
-    onFastForward: () -> Unit, onSwap: () -> Unit, onCycleLayout: () -> Unit, onMenu: () -> Unit, modifier: Modifier,
+    isGame: Boolean, platform: Platform, fastForward: Boolean, slot: com.projectcit.layout.Rect?,
+    onFastForward: () -> Unit, onSwap: () -> Unit, onCycleLayout: () -> Unit, onMenu: () -> Unit,
 ) {
+    slot ?: return
+    val d = LocalDensity.current.density
     val colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Color(0x66000000), contentColor = Color.White)
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (isGame) {
-            FilledTonalIconButton(
-                onClick = onFastForward, modifier = Modifier.size(40.dp),
-                colors = if (fastForward) IconButtonDefaults.filledTonalIconButtonColors() else colors,
-            ) { Text("⏩", fontSize = 16.sp) }
+    val size = Modifier.size(LayoutEngine.TOOLBAR_BUTTON_DP.dp)
+    val buttons: List<@Composable () -> Unit> = buildList {
+        if (isGame) add {
+            FilledTonalIconButton(onClick = onFastForward, modifier = size,
+                colors = if (fastForward) IconButtonDefaults.filledTonalIconButtonColors() else colors) { Text("⏩", fontSize = 16.sp) }
         }
         if (platform.isDualScreen) {
-            FilledTonalIconButton(onClick = onSwap, modifier = Modifier.size(40.dp), colors = colors) { Text("⇅", fontSize = 18.sp) }
-            FilledTonalIconButton(onClick = onCycleLayout, modifier = Modifier.size(40.dp), colors = colors) { Text("▣", fontSize = 16.sp) }
+            add { FilledTonalIconButton(onClick = onSwap, modifier = size, colors = colors) { Text("⇅", fontSize = 18.sp) } }
+            add { FilledTonalIconButton(onClick = onCycleLayout, modifier = size, colors = colors) { Text("▣", fontSize = 16.sp) } }
         }
-        FilledTonalIconButton(onClick = onMenu, modifier = Modifier.size(40.dp), colors = colors) { Text("☰", fontSize = 18.sp) }
+        add { FilledTonalIconButton(onClick = onMenu, modifier = size, colors = colors) { Text("☰", fontSize = 18.sp) } }
+    }
+    val place = Modifier
+        .offset { IntOffset(slot.left.toInt(), slot.top.toInt()) }
+        .size((slot.width / d).dp, (slot.height / d).dp)
+        .padding(4.dp)
+    val gap = Arrangement.spacedBy(LayoutEngine.TOOLBAR_GAP_DP.dp, Alignment.End)
+    if (slot.height > slot.width) {
+        Column(place, verticalArrangement = Arrangement.spacedBy(LayoutEngine.TOOLBAR_GAP_DP.dp), horizontalAlignment = Alignment.CenterHorizontally) { buttons.forEach { it() } }
+    } else {
+        Row(place, horizontalArrangement = gap, verticalAlignment = Alignment.CenterVertically) { buttons.forEach { it() } }
     }
 }
 
@@ -276,7 +298,7 @@ private suspend fun PointerInputScope.forwardTouches(router: TouchRouter) {
 
 @Composable
 private fun Hud(
-    spec: LayoutSpec, platform: Platform, window: WindowSpec, raw: RawFold?, source: PostureSource, gamepad: Boolean,
+    spec: LayoutSpec, options: LayoutOptions, window: WindowSpec, raw: RawFold?, source: PostureSource, gamepad: Boolean,
     romTitle: String?, stats: RunnerStats?, expanded: Boolean, onToggle: () -> Unit, modifier: Modifier,
 ) {
     val lines = buildList {
@@ -291,7 +313,8 @@ private fun Hud(
             add(if (raw == null) "FoldingFeature: none reported" else "fold ${raw.state} ${raw.orientation} sep=${raw.isSeparating} occl=${raw.occlusion}")
             raw?.let { add("fold bounds(window px) ${it.boundsInWindow.toShortString()}") }
             add("source ${source.label}  ·  gamepad ${if (gamepad) "connected" else "none"}")
-            spec.screens.forEach { s -> add("%s %s ×%.2f".format(s.role, s.rect, s.rect.width / platform.screenWidth)) }
+            add("frame %d×%d".format(options.sourceWidth, options.sourceHeight * options.platform.screenCount))
+            spec.screens.forEach { s -> add("%s %s ×%.2f".format(s.role, s.rect, s.rect.width / options.sourceWidth)) }
         }
     }
     Column(

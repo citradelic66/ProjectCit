@@ -21,15 +21,20 @@ class PadGalleryExport {
             HingeInfo(Rect(928f, 0f, 928f, 2160f), HingeOrientation.VERTICAL, HingeState.FLAT, false, false))
         val flex = WindowSpec(2160f, 1856f, d, Insets(0f, 96f, 0f, 63f),
             HingeInfo(Rect(0f, 928f, 2160f, 928f), HingeOrientation.HORIZONTAL, HingeState.HALF_OPENED, true, false))
+        // The user's real Fold (from their debug overlay) and cover screen.
+        val fold7 = WindowSpec(1968f, 2184f, d, Insets(0f, 63f, 0f, 63f),
+            HingeInfo(Rect(984f, 0f, 984f, 2184f), HingeOrientation.VERTICAL, HingeState.FLAT, false, false))
+        val cover = WindowSpec(1080f, 2520f, d, Insets(0f, 110f, 0f, 63f))
+        val sgb = LayoutOptions(Platform.GB, frameWidth = 256, frameHeight = 224, toolbarButtons = 2)
         val cases = listOf(
-            Triple("Phone · GBA", WindowSpec(1080f, 2400f, d, Insets(0f, 128f, 0f, 63f)), LayoutOptions(Platform.GBA)),
-            Triple("Cover · NDS", WindowSpec(968f, 2376f, d, Insets(0f, 110f, 0f, 63f)), LayoutOptions(Platform.NDS)),
-            Triple("Landscape · GBA", WindowSpec(2400f, 1080f, d, Insets(128f, 0f, 63f, 0f)), LayoutOptions(Platform.GBA)),
-            Triple("Fold flat · GBA", inner, LayoutOptions(Platform.GBA)),
-            Triple("Fold flat · NDS book", inner, LayoutOptions(Platform.NDS)),
-            Triple("Fold flat · NDS hybrid", inner, LayoutOptions(Platform.NDS, NdsBookMode.HYBRID)),
-            Triple("Flex · GBA SP", flex, LayoutOptions(Platform.GBA)),
-            Triple("Flex · NDS clamshell", flex, LayoutOptions(Platform.NDS)),
+            Triple("Cover · GB (SGB)", cover, sgb),
+            Triple("Cover · GBA", cover, LayoutOptions(Platform.GBA, toolbarButtons = 2)),
+            Triple("Cover · NDS", cover, LayoutOptions(Platform.NDS, toolbarButtons = 4)),
+            Triple("Landscape · NDS", WindowSpec(2520f, 1080f, d, Insets(110f, 0f, 63f, 0f)), LayoutOptions(Platform.NDS, toolbarButtons = 4)),
+            Triple("Fold7 flat · GB (SGB)", fold7, sgb),
+            Triple("Fold7 flat · NDS book", fold7, LayoutOptions(Platform.NDS, toolbarButtons = 4)),
+            Triple("Fold7 flat · NDS hybrid", fold7, LayoutOptions(Platform.NDS, NdsBookMode.HYBRID, toolbarButtons = 4)),
+            Triple("Flex · NDS clamshell", flex, LayoutOptions(Platform.NDS, toolbarButtons = 4)),
         )
         val figs = cases.joinToString("") { (title, w, o) ->
             val spec = LayoutEngine.compute(w, o)
@@ -53,6 +58,7 @@ class PadGalleryExport {
                     }
                 }
             }
+            spec.toolbar?.let { t -> sb.append("<rect x='${t.left}' y='${t.top}' width='${t.width}' height='${t.height}' rx='20' fill='rgba(255,200,0,.35)' stroke='#fc0' stroke-width='4'/>") }
             "<figure><svg viewBox='0 0 ${w.widthPx.toInt()} ${w.heightPx.toInt()}'>$sb</svg><figcaption>$title</figcaption></figure>"
         }
         File("build/pad-gallery").apply { mkdirs() }.resolve("index.html").writeText(
